@@ -1,0 +1,86 @@
+name: 🚀 FTP_Deploy to CORESERVER via FTP # ワークフローの分かりやすい名前
+
+on:
+  push:
+    branches:
+      - main # このブランチへのプッシュがトリガーとなります
+
+jobs:
+  web-deploy: # デプロイ処理を行うジョブ
+    name: Deploy to Server # ジョブの表示名
+    runs-on: ubuntu-latest # ジョブが実行される仮想環境
+
+    steps:
+      - name: Checkout Repository # 最新のコードをGitHub Actionsランナーにチェックアウト
+        uses: actions/checkout@v4
+
+      # --- ⭐ 診断ステップを追加します ⭐ ---
+      - name: List files in repository # リポジトリ内のファイルとディレクトリをリスト表示
+        run: |
+          echo "Current working directory: $(pwd)"
+          echo "Contents of current directory:"
+          ls -RF # 再帰的にすべてのファイルとディレクトリをリストします
+          # ここに `languages` フォルダが見つかるか確認してください。
+          # もし見つからなければ、それは存在しないか、別の場所にあることを意味します。
+          
+        # このステップの出力を見て、`languages`フォルダがどこにあるか確認してください。
+        # 例:
+        # ./
+        # ./languages/
+        # ./languages/en.json
+        # ./src/
+        # ./src/app.js
+        # ./dist/
+        # ./dist/index.html
+
+      # --- ここからビルドステップの例 (必要に応じてコメントアウトを外し、調整してください) ---
+      # フロントエンドプロジェクト (React, Vue, Next.jsなど) や静的サイトジェネレーター (Jekyll, Hugoなど) の場合、
+      # デプロイ前にビルドプロセスが必要です。
+      #
+      # - name: Setup Node.js # ビルドにNode.jsが必要な場合、Node.js環境をセットアップ
+      #   uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '18' # プロジェクトで使用しているNode.jsのバージョンに合わせてください
+      #
+      # - name: Install Dependencies # プロジェクトの依存関係をインストール
+      #   run: npm install # または yarn install, pnpm install など、使用しているパッケージマネージャーに合わせてください
+      #
+      # - name: Build Project # プロジェクトをビルドして本番用ファイルを生成
+      #   run: npm run build # プロジェクトのビルドコマンドに合わせてください (例: npm run generate for Nuxt.js)
+      #   env:
+      #     NODE_ENV: production # ビルド環境変数を設定 (任意)
+      # --- ビルドステップの例はここまで ---
+
+      - name: Deploy files via FTP # 指定されたFTPサーバーにファイルをデプロイ
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.2 # FTPデプロイ用のGitHub Action
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps # または sftp (別アクションの場合), CORESERVERのサポート状況を確認してください
+          port: ${{ secrets.FTP_PORT }}
+          # ⭐ ここを、`ls -RF` コマンドで確認した正しいパスに修正してください。
+          local-dir: ${{ secrets.LOCAL_DIR }} #/home/runner/work/languages/languages/ # 例: リポジトリのルートにlanguagesフォルダがある場合
+          # 例: もしビルド後、出力が `dist/languages/` になる場合:
+          # local-dir: ./dist/languages/
+          # 例: もしリポジトリのルート全体をデプロイしたい場合:
+          # local-dir: ./
+
+          server-dir: ${{ secrets.SSH_TARGET_DIR }}/ # CORESERVER上のデプロイ先ディレクトリ (末尾にスラッシュ必須)
+
+          exclude: |
+            .git/
+            .github/
+            # node_modules/
+            .env
+            *.log
+
+      # - name: Send Discord Notification # デプロイ結果をDiscordに通知
+      #   uses: sarisia/actions-status-discord@v1
+      #   if: always()
+      #   env:
+      #     DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+      #   with:
+      #     title: "${{ job.status == 'success' && '✨ デプロイ成功！' || '❌ デプロイ失敗...' }}"
+      #     description: "リポジトリ **${{ github.repository }}** への最新コードデプロイが **${{ job.status }}** しました。\n\n詳細: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      #     color: ${{ job.status == 'success' && '0x36a64f' || '0xff0000' }}
